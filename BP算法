@@ -1,1 +1,110 @@
+# -*- coding: utf-8 -*-
+import numpy as np
+import matplotlib.pyplot as plt
 
+#激活函数
+def logist(x):
+    return 1/(1+np.exp(-x))
+
+#人数(单位：万人)
+population = [20.55,22.44,25.37,27.13,29.45,30.10,30.96,34.06,36.42,38.09,39.13,39.99,41.93,44.59,47.3,52.89,55.73,56.76,59.17,60.63]
+
+#机动车车数(单位：万辆)
+vehicle = [0.6,0.75,0.85,0.9,1.05,1.35,1.45,1.6,1.7,1.85,2.15,2.2,2.25,2.35,2.5,2.6,2.7,2.85,2.95,3.1]
+
+#公路面积(单位：万平方公里)
+roadarea = [0.09,0.11,0.11,0.14,0.20,0.23,0.23,0.32,0.32,0.34,0.36,0.36,0.38,0.49,0.56,0.59,0.59,0.67,0.69,0.79]
+
+#公路客运量(单位：万人)
+passengertraffic = [5126,6217,7730,9145,10460,11387,12353,15750,18304,19836,21204,19499,20433,22598,25107,33442,36836,40548,42927,43462]
+
+#公路货运量(单位：万吨)
+freighttraffic  = [1237,1379,1385,1399,1663,1714,1834,4322,8132,8936,11099,11203,10524,11115,13320,16762,18673,20724,20803,21804]
+
+samplein = np.mat([population,vehicle,roadarea])
+sampleinminmax = np.array([samplein.min(axis=1).T.tolist()[0],samplein.max(axis=1).T.tolist()[0]]).transpose()#求每一行对应的最大最小值,shape(3,2)
+#min = samplein.min(axis=1)
+#min.T
+sampleout = np.mat([passengertraffic,freighttraffic])
+sampleoutminmax = np.array([sampleout.min(axis=1).T.tolist()[0],sampleout.max(axis=1).T.tolist()[0]]).transpose()
+
+#归一化
+sampleinnorm = 2*(np.array(samplein.T)-sampleinminmax.transpose()[0])/(sampleinminmax.transpose()[1]-sampleinminmax.transpose()[0]-1)
+sampleoutnorm = 2*(np.array(sampleout.T).astype(float)-sampleoutminmax.transpose()[0])/(sampleoutminmax.transpose()[1]-sampleoutminmax.transpose()[0]-1)
+
+sampleinnorm = sampleinnorm.T
+sampleoutnorm = sampleoutnorm.T
+
+#给输出样本添加噪音
+noise = 0.03 * np.random.rand(sampleoutnorm.shape[0],sampleoutnorm.shape[1])#rand(a,b)创建一个数组,shape(a,b)
+sampleoutnorm += noise
+
+maxexpochs = 60000  #迭代次数
+learnrate = 0.033   #学习率
+errorfinal = 0.65 * (10**(-3))  #最终误差
+sumnum = 20 #
+indim = 3   #输入样本个数
+outdim = 2  #输出
+hiddenunitnum = 8   #隐藏层神经元个数
+
+#参数初始化
+w1 = 0.5 * np.random.rand(hiddenunitnum,indim) - 0.1    #shape(8,3)
+b1 = 0.5 * np.random.rand(hiddenunitnum,1) -0.1         #shape(8,1)
+w2 = 0.5 * np.random.rand(outdim,hiddenunitnum) - 0.1   #shape(2,8)
+b2 = 0.5 * np.random.rand(outdim,1) - 0.1               #shape(2,1)
+
+errhistory = []
+for i in range(maxexpochs):
+    hiddenout = logist(np.dot(w1,sampleinnorm).transpose()+b1.transpose()).transpose()#shape(8,20)
+    networkout = (np.dot(w2,hiddenout).transpose()+b2.transpose()).transpose()#shape(2,20)----老师的代码里没有用激活函数作用
+    
+    err = sampleoutnorm - networkout
+    
+    sse = sum(sum((err**2)))
+    errhistory.append(sse)
+    if sse < errorfinal:
+        break
+    
+    
+    ##隐藏层误差
+    #err_hidden = np.dot(w2.transpose(),err)
+    
+    ##更新隐层和输出层的误差
+    #dw_ho = np.dot((err*networkout*(1-networkout)),hiddenout.transpose())
+    #w2 -= learnrate * dw_ho
+    
+    ##更新输入层和隐层的误差
+    #dw_ih = np.dot((err_hidden*hiddenout*(1-hiddenout)),sampleinnorm.transpose())
+    #w1 -= learnrate * dw_ih
+    delta2 = err    #update w2
+    delta1 = np.dot(w2.transpose(),delta2) * hiddenout * (1-hiddenout)  #updata w1
+    
+    dw2 = np.dot(delta2,hiddenout.transpose())
+    db2 = np.dot(delta2,np.ones((sumnum,1)))
+    
+    dw1 = np.dot(delta1,sampleinnorm.transpose())
+    db1 = np.dot(delta1,np.ones((sumnum,1)))
+    
+    w2 += learnrate * dw2
+    b2 += learnrate * db2
+    
+    w1 += learnrate * dw1
+    b1 += learnrate * db1
+#hiddenout = logist(np.dot(w1,sampleinnorm).transpose()).transpose()
+#networkout = logist(np.dot(w2,hiddenout).transpose()).transpose()  
+
+#误差曲线图
+errhistory10 = np.log(errhistory)
+minerr = min(errhistory10)
+plt.plot(errhistory10)
+plt.plot(range(0,i+1000,1000),[minerr]*len(range(0,i+1000,1000)))
+ax = plt.gca()
+ax.set_yticks([-2,-1,0,1,2,minerr])
+ax.set_yticklabels([u'$10^{-2}$',u'$10^{-1}$',u'$1$',u'$10^{1}$',u'$10^{2}$',str(('%4f'%np.power(10,minerr)))])
+ax.set_xlabel('iteration')
+ax.set_ylabel('error')
+ax.set_title('error history')
+plt.show
+plt.savefig('errorhistory.png')
+plt.close()
+print('ok')
